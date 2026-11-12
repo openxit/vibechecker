@@ -31,6 +31,7 @@ def _build_parser() -> argparse.ArgumentParser:
     scan_p = subparsers.add_parser("scan", help="Scan a file or directory (default command).")
     _add_scan_args(scan_p)
 
+    subparsers.add_parser("gui", help="Launch the desktop GUI.")
     subparsers.add_parser("rules", help="List all available analysis rules.")
 
     init_p = subparsers.add_parser("init", help="Create a .vibecheck.toml config file.")
@@ -131,12 +132,16 @@ def main(argv: list[str] | None = None) -> int:
     raw_args = list(sys.argv[1:] if argv is None else argv)
 
     # Allow `vibecheck [path] [flags]` without requiring explicit `scan` subcommand.
-    if not raw_args or raw_args[0] not in {"scan", "rules", "init", "-h", "--help", "--version"}:
+    if not raw_args or raw_args[0] not in {"scan", "rules", "init", "gui", "-h", "--help", "--version"}:
         raw_args = ["scan", *raw_args]
 
     parser = _build_parser()
     args = parser.parse_args(raw_args)
 
+    if args.command == "gui":
+        from vibecheck.gui import launch_gui
+
+        return launch_gui()
     if args.command == "rules":
         return _cmd_rules()
     if args.command == "init":
