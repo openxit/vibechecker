@@ -9,7 +9,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from vibecheck import __version__
 from vibecheck.config import load_config
-from vibecheck.formatters import format_json
+from vibecheck.formatters import format_fix_prompt, format_json
 from vibecheck.models import Finding, ScanResult, Severity
 from vibecheck.scanner import scan_path
 
@@ -84,6 +84,64 @@ class _ScanProgressDialog:
             self.win.destroy()
 
 
+class _FixPromptDialog:
+    """Modal window displaying a generated AI repair prompt with clipboard copy."""
+
+    def __init__(self, parent: tk.Tk, prompt_text: str) -> None:
+        self._prompt_text = prompt_text
+        self.win = tk.Toplevel(parent)
+        self.win.title("AI Fix Prompt")
+        self.win.geometry("720x480")
+        self.win.minsize(520, 340)
+        self.win.transient(parent)
+
+        frame = ttk.Frame(self.win, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            frame,
+            text="Copy this prompt into your IDE / AI assistant to fix the detected issues:",
+        ).pack(anchor=tk.W, pady=(0, 6))
+
+        text_frame = ttk.Frame(frame)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+
+        text_box = tk.Text(text_frame, wrap=tk.WORD, font=("Consolas", 9))
+        y_scroll = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text_box.yview)
+        text_box.configure(yscrollcommand=y_scroll.set)
+        text_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        y_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        text_box.insert("1.0", prompt_text)
+        text_box.configure(state=tk.DISABLED)
+
+        btn_row = ttk.Frame(frame)
+        btn_row.pack(fill=tk.X, pady=(8, 0))
+        self._copied_var = tk.StringVar(value="")
+        ttk.Label(btn_row, textvariable=self._copied_var, foreground="#15803d").pack(side=tk.LEFT)
+        ttk.Button(btn_row, text="Close", command=self.win.destroy).pack(side=tk.RIGHT)
+        ttk.Button(btn_row, text="Save .txt...", command=self._save_txt).pack(side=tk.RIGHT, padx=(0, 6))
+        ttk.Button(btn_row, text="Copy to Clipboard", command=self._copy).pack(side=tk.RIGHT, padx=(0, 6))
+
+    def _copy(self) -> None:
+        self.win.clipboard_clear()
+        self.win.clipboard_append(self._prompt_text)
+        self.win.update()
+        self._copied_var.set("Copied to clipboard.")
+
+    def _save_txt(self) -> None:
+        dest = filedialog.asksaveasfilename(
+            parent=self.win,
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("Markdown files", "*.md")],
+            initialfile="vibecheck-fix-prompt.txt",
+        )
+        if not dest:
+            return
+        Path(dest).write_text(self._prompt_text, encoding="utf-8")
+        self._copied_var.set(f"Saved to {Path(dest).name}")
+
+
 class VibecheckApp:
     """Native desktop window for running vibecheck scans."""
 
@@ -156,6 +214,9 @@ class VibecheckApp:
         self._export_btn = ttk.Button(options, text="Export JSON...", command=self._export_json, state=tk.DISABLED)
         self._export_btn.pack(side=tk.RIGHT)
 
+        self._prompt_btn = ttk.Button(options, text="Fix Prompt...", command=self._show_fix_prompt, state=tk.DISABLED)
+        self._prompt_btn.pack(side=tk.RIGHT, padx=(0, 6))
+
         self._score_label = ttk.Label(options, textvariable=self._score_var, font=("Segoe UI", 9, "bold"))
         self._score_label.pack(side=tk.RIGHT, padx=(0, 12))
 
@@ -213,6 +274,7 @@ class VibecheckApp:
 
         self._scan_btn.configure(state=tk.DISABLED)
         self._export_btn.configure(state=tk.DISABLED)
+        self._prompt_btn.configure(state=tk.DISABLED)
         self._status_var.set(f"Scanning {target}...")
         self._snippet_var.set("")
         self._hint_var.set("")
@@ -250,15 +312,24 @@ class VibecheckApp:
         self._last_result = result
         self._scan_btn.configure(state=tk.NORMAL)
         self._export_btn.configure(state=tk.NORMAL)
+        self._prompt_btn.configure(state=tk.NORMAL if result.findings else tk.DISABLED)
 
         score = result.slop_score
         self._score_var.set(f"Slop Score: {score}/100")
+        if score == 0:
+            self._score_label.configure(foreground="#15803d")
+        elif score <= 25:
+            self._score_label.configure(foreground="#b45309")
+        else:
+            self._score_label.configure(foreground="#b91c1c")
 
         counts = result.counts_by_severity()
         status = (
             f"Scanned {result.files_scanned} file(s) ({result.files_skipped} skipped) | "
             f"{counts[Severity.ERROR]} error(s), {counts[Severity.WARNING]} warning(s), {counts[Severity.INFO]} info"
         )
+        if score > 25:
+            status += " | High score: click 'Fix Prompt...' to copy an AI repair prompt."
         if result.errors:
             status += f" | {result.errors[0]}"
         self._status_var.set(status)
@@ -320,6 +391,11 @@ class VibecheckApp:
             return
         Path(dest).write_text(format_json(self._last_result), encoding="utf-8")
         self._status_var.set(f"Exported report to {dest}")
+
+    def _show_fix_prompt(self) -> None:
+        if self._last_result is None or not self._last_result.findings:
+            return
+        _FixPromptDialog(self.root, format_fix_prompt(self._last_result))
 
 
 def launch_gui(initial_dir: Path | None = None) -> int:

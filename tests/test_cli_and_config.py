@@ -52,6 +52,22 @@ def real_stub(y: int) -> None:
             self.assertEqual(code_init, 0)
             self.assertTrue((Path(tmp) / ".vibecheck.toml").is_file())
 
+    def test_prompt_output_includes_findings_and_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "bad.py").write_text(
+                "def broken(x: int) -> None:\n    pass\n",
+                encoding="utf-8",
+            )
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = main([str(root), "--format", "prompt"])
+            self.assertEqual(code, 0)
+            out = buf.getvalue()
+            self.assertIn("VC001", out)
+            self.assertIn("bad.py", out)
+            self.assertIn("Required fix guidelines", out)
+
 
 if __name__ == "__main__":
     unittest.main()

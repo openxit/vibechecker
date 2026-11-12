@@ -142,3 +142,51 @@ def format_github(result: ScanResult) -> str:
             f"::{level} file={rel},line={f.line},col={f.column},title={f.rule_id}::{f.message}"
         )
     return "\n".join(lines)
+
+
+_RULE_FIX_GUIDANCE: dict[str, str] = {
+    "VC001": "Replace phantom stubs and dummy returns with real implementations (or @abstractmethod if intentionally abstract).",
+    "VC002": "Resolve all placeholder/TODO/AI-deferral comments and complete the missing logic.",
+    "VC003": "Extract duplicated functions into a single shared helper and reuse it.",
+    "VC004": "Handle exceptions explicitly with context or re-raise instead of silently swallowing them.",
+    "VC005": "Verify every flagged import: install/declare valid dependencies in pyproject.toml/package.json or remove hallucinated packages.",
+    "VC006": "Remove mock/dummy variables and placeholder credentials from non-test source files; load secrets from environment variables.",
+}
+
+
+def format_fix_prompt(result: ScanResult) -> str:
+    """Generate a ready-to-paste AI repair prompt for all findings in *result*."""
+    if not result.findings:
+        return "No issues found (Slop Score: 0/100)."
+
+    by_file: dict[Path, list[Finding]] = defaultdict(list)
+    seen_rules: dict[str, None] = {}
+    for finding in result.findings:
+        by_file[finding.path].append(finding)
+        seen_rules[finding.rule_id] = None
+
+    lines: list[str] = [
+        f"Fix the following static analysis issues found by vibecheck (Slop Score: {result.slop_score}/100).",
+        "Make minimal, production-grade changes without introducing new stubs, placeholders, or duplicated helpers.",
+        "",
+        "## Issues by file",
+    ]
+
+    for file_path, findings in by_file.items():
+        rel = _display_path(file_path, result.root)
+        lines.append(f"\n### {rel}")
+        for f in findings:
+            lines.append(f"- Line {f.line} [{f.rule_id} / {f.severity.value}]: {f.message}")
+            if f.snippet:
+                lines.append(f"  Code: `{f.snippet}`")
+            if f.hint:
+                lines.append(f"  Hint: {f.hint}")
+
+    lines.append("\n## Required fix guidelines")
+    for rule_id in seen_rules:
+        guidance = _RULE_FIX_GUIDANCE.get(rule_id)
+        if guidance:
+            lines.append(f"- {rule_id}: {guidance}")
+
+    lines.append("\nAfter fixing, ensure all existing tests pass and no new stub functions or TODOs remain.")
+    return "\n".join(lines)

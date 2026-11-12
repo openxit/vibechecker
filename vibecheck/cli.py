@@ -9,7 +9,7 @@ from pathlib import Path
 
 from vibecheck import __version__
 from vibecheck.config import DEFAULT_CONFIG_TEMPLATE, load_config
-from vibecheck.formatters import format_github, format_json, format_text
+from vibecheck.formatters import format_fix_prompt, format_github, format_json, format_text
 from vibecheck.models import ScanResult, Severity
 from vibecheck.rules import RULES
 from vibecheck.scanner import scan_path
@@ -59,7 +59,7 @@ def _add_scan_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--format",
-        choices=("text", "json", "github"),
+        choices=("text", "json", "github", "prompt"),
         default="text",
         help="Output format (default: text).",
     )
@@ -169,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.format == "json":
         print(format_json(result))
+    elif args.format == "prompt":
+        print(format_fix_prompt(result))
     elif args.format == "github":
         output = format_github(result)
         if output:
