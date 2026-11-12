@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
+from threading import Event
 
 from vibecheck.ignore import (
     is_suppressed,
@@ -44,7 +46,13 @@ def _discover_files(target: Path, config: Config) -> list[Path]:
     return collected
 
 
-def scan_path(target: Path, config: Config) -> ScanResult:
+def scan_path(
+    target: Path,
+    config: Config,
+    *,
+    progress_callback: Callable[[int, int, Path], None] | None = None,
+    cancel_event: Event | None = None,
+) -> ScanResult:
     """Scan *target* (file or directory) and return a `ScanResult`."""
     resolved = target.resolve()
     result = ScanResult(root=config.root)
@@ -61,8 +69,16 @@ def scan_path(target: Path, config: Config) -> ScanResult:
     file_suppressions: dict[Path, dict[int, frozenset[str] | None]] = {}
     raw_findings: list[Finding] = []
 
-    for file_path in files:
+    total_files = len(files)
+    for idx, file_path in enumerate(files, start=1):
+        if cancel_event is not None and cancel_event.is_set():
+            result.errors.append("Scan cancelled by user.")
+            break
+
         rel_path = file_path.relative_to(config.root) if file_path.is_relative_to(config.root) else file_path
+        if progress_callback is not None:
+            progress_callback(idx, total_files, rel_path)
+
         test_file = is_test_file(rel_path)
         if test_file and not config.include_tests:
             result.files_skipped += 1
