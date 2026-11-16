@@ -1,7 +1,9 @@
-"""Native Tkinter desktop GUI for vibecheck."""
+"""Native high-DPI Tkinter desktop GUI for vibecheck."""
 
 from __future__ import annotations
 
+import ctypes
+import sys
 import threading
 import time
 import tkinter as tk
@@ -26,6 +28,31 @@ _INTERVAL_LABELS = {
     60: "Every 60 min",
 }
 
+# Clean light-neutral desktop palette (GitHub Desktop / Linear style)
+_BG_MAIN = "#ffffff"
+_BG_SIDEBAR = "#f6f8fa"
+_BG_CARD = "#ffffff"
+_BG_SUBTLE = "#f6f8fa"
+_BORDER = "#d0d7de"
+_TEXT = "#1f2328"
+_MUTED = "#656d76"
+_PRIMARY = "#0969da"
+_PRIMARY_HOVER = "#0550ae"
+_SEL_BG = "#ddf4ff"
+_ERR = "#cf222e"
+_WARN = "#9a6700"
+_OK = "#1a7f37"
+
+
+def _enable_high_dpi() -> None:
+    """Enable sharp High-DPI text and borders on Windows."""
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except (AttributeError, OSError):
+        pass
+
 
 class _ScanProgressDialog:
     """Modal progress popup displaying current stage, file count, and progress bar."""
@@ -33,30 +60,53 @@ class _ScanProgressDialog:
     def __init__(self, parent: tk.Tk, cancel_event: threading.Event) -> None:
         self._cancel_event = cancel_event
         self.win = tk.Toplevel(parent)
-        self.win.title("Scanning...")
+        self.win.title("Scanning")
         self.win.resizable(False, False)
+        self.win.configure(bg=_BG_MAIN)
         self.win.transient(parent)
         self.win.grab_set()
         self.win.protocol("WM_DELETE_WINDOW", self._on_cancel)
 
-        frame = ttk.Frame(self.win, padding=16)
+        frame = tk.Frame(self.win, bg=_BG_MAIN, padx=20, pady=18)
         frame.pack(fill=tk.BOTH, expand=True)
 
         self._count_var = tk.StringVar(value="Discovering files...")
         self._file_var = tk.StringVar(value="")
 
-        ttk.Label(frame, textvariable=self._count_var, font=("Segoe UI", 9, "bold")).pack(
-            anchor=tk.W, pady=(0, 6)
+        tk.Label(
+            frame,
+            textvariable=self._count_var,
+            bg=_BG_MAIN,
+            fg=_TEXT,
+            font=("Segoe UI", 10, "bold"),
+            anchor=tk.W,
+        ).pack(fill=tk.X, pady=(0, 8))
+
+        self._bar = ttk.Progressbar(
+            frame,
+            orient=tk.HORIZONTAL,
+            length=400,
+            mode="indeterminate",
+            style="Modern.Horizontal.TProgressbar",
         )
-        self._bar = ttk.Progressbar(frame, orient=tk.HORIZONTAL, length=380, mode="indeterminate")
-        self._bar.pack(fill=tk.X, pady=(0, 6))
+        self._bar.pack(fill=tk.X, pady=(0, 8))
         self._bar.start(12)
 
-        ttk.Label(frame, textvariable=self._file_var, width=54).pack(anchor=tk.W, pady=(0, 12))
+        tk.Label(
+            frame,
+            textvariable=self._file_var,
+            bg=_BG_MAIN,
+            fg=_MUTED,
+            font=("Consolas", 9),
+            width=54,
+            anchor=tk.W,
+        ).pack(fill=tk.X, pady=(0, 14))
 
-        btn_row = ttk.Frame(frame)
+        btn_row = tk.Frame(frame, bg=_BG_MAIN)
         btn_row.pack(fill=tk.X)
-        ttk.Button(btn_row, text="Cancel", command=self._on_cancel).pack(side=tk.RIGHT)
+        ttk.Button(btn_row, text="Cancel", style="Secondary.TButton", command=self._on_cancel).pack(
+            side=tk.RIGHT
+        )
 
         self._center_over_parent(parent)
 
@@ -86,8 +136,8 @@ class _ScanProgressDialog:
         pct = round((current / total) * 100) if total > 0 else 0
         self._count_var.set(f"Checking file {current} of {total} ({pct}%)")
         display = rel_path.as_posix()
-        if len(display) > 58:
-            display = "..." + display[-55:]
+        if len(display) > 56:
+            display = "..." + display[-53:]
         self._file_var.set(display)
 
     def _on_cancel(self) -> None:
@@ -108,22 +158,39 @@ class _FixPromptDialog:
         self._prompt_text = prompt_text
         self.win = tk.Toplevel(parent)
         self.win.title("Repair Prompt")
-        self.win.geometry("720x480")
-        self.win.minsize(520, 340)
+        self.win.geometry("740x500")
+        self.win.minsize(540, 360)
+        self.win.configure(bg=_BG_MAIN)
         self.win.transient(parent)
 
-        frame = ttk.Frame(self.win, padding=10)
+        frame = tk.Frame(self.win, bg=_BG_MAIN, padx=16, pady=14)
         frame.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(
+        tk.Label(
             frame,
-            text="Copy this prompt into your editor or assistant to fix the detected issues:",
-        ).pack(anchor=tk.W, pady=(0, 6))
+            text="Copy this prompt into your editor or assistant to resolve the findings:",
+            bg=_BG_MAIN,
+            fg=_TEXT,
+            font=("Segoe UI", 9),
+            anchor=tk.W,
+        ).pack(fill=tk.X, pady=(0, 8))
 
-        text_frame = ttk.Frame(frame)
+        border = tk.Frame(frame, bg=_BORDER, padx=1, pady=1)
+        border.pack(fill=tk.BOTH, expand=True)
+
+        text_frame = tk.Frame(border, bg=_BG_SUBTLE)
         text_frame.pack(fill=tk.BOTH, expand=True)
 
-        text_box = tk.Text(text_frame, wrap=tk.WORD, font=("Consolas", 9))
+        text_box = tk.Text(
+            text_frame,
+            wrap=tk.WORD,
+            font=("Consolas", 9),
+            bg=_BG_SUBTLE,
+            fg=_TEXT,
+            relief=tk.FLAT,
+            padx=10,
+            pady=8,
+        )
         y_scroll = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text_box.yview)
         text_box.configure(yscrollcommand=y_scroll.set)
         text_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -132,13 +199,25 @@ class _FixPromptDialog:
         text_box.insert("1.0", prompt_text)
         text_box.configure(state=tk.DISABLED)
 
-        btn_row = ttk.Frame(frame)
-        btn_row.pack(fill=tk.X, pady=(8, 0))
+        btn_row = tk.Frame(frame, bg=_BG_MAIN)
+        btn_row.pack(fill=tk.X, pady=(10, 0))
         self._copied_var = tk.StringVar(value="")
-        ttk.Label(btn_row, textvariable=self._copied_var, foreground="#15803d").pack(side=tk.LEFT)
-        ttk.Button(btn_row, text="Close", command=self.win.destroy).pack(side=tk.RIGHT)
-        ttk.Button(btn_row, text="Save .txt...", command=self._save_txt).pack(side=tk.RIGHT, padx=(0, 6))
-        ttk.Button(btn_row, text="Copy to Clipboard", command=self._copy).pack(side=tk.RIGHT, padx=(0, 6))
+        tk.Label(
+            btn_row,
+            textvariable=self._copied_var,
+            bg=_BG_MAIN,
+            fg=_OK,
+            font=("Segoe UI", 9),
+        ).pack(side=tk.LEFT)
+        ttk.Button(btn_row, text="Close", style="Secondary.TButton", command=self.win.destroy).pack(
+            side=tk.RIGHT
+        )
+        ttk.Button(btn_row, text="Save .txt...", style="Secondary.TButton", command=self._save_txt).pack(
+            side=tk.RIGHT, padx=(0, 6)
+        )
+        ttk.Button(btn_row, text="Copy to Clipboard", style="Primary.TButton", command=self._copy).pack(
+            side=tk.RIGHT, padx=(0, 6)
+        )
 
     def _copy(self) -> None:
         self.win.clipboard_clear()
@@ -167,10 +246,11 @@ class _ProjectDialog:
         self.win = tk.Toplevel(parent)
         self.win.title("Edit Project" if existing else "Add Project")
         self.win.resizable(False, False)
+        self.win.configure(bg=_BG_MAIN)
         self.win.transient(parent)
         self.win.grab_set()
 
-        frame = ttk.Frame(self.win, padding=14)
+        frame = tk.Frame(self.win, bg=_BG_MAIN, padx=18, pady=16)
         frame.pack(fill=tk.BOTH, expand=True)
 
         self._name_var = tk.StringVar(value=existing.name if existing else "")
@@ -181,37 +261,55 @@ class _ProjectDialog:
         self._enabled_var = tk.BooleanVar(value=existing.enabled if existing else True)
         self._tests_var = tk.BooleanVar(value=existing.include_tests if existing else False)
 
-        ttk.Label(frame, text="Name:").grid(row=0, column=0, sticky=tk.W, pady=4)
+        tk.Label(frame, text="Name", bg=_BG_MAIN, fg=_TEXT, font=("Segoe UI", 9)).grid(
+            row=0, column=0, sticky=tk.W, pady=5, padx=(0, 10)
+        )
         ttk.Entry(frame, textvariable=self._name_var, width=42).grid(
-            row=0, column=1, columnspan=2, sticky=tk.EW, pady=4
+            row=0, column=1, columnspan=2, sticky=tk.EW, pady=5
         )
 
-        ttk.Label(frame, text="Folder or GitHub URL:").grid(row=1, column=0, sticky=tk.W, pady=4)
+        tk.Label(frame, text="Folder or GitHub URL", bg=_BG_MAIN, fg=_TEXT, font=("Segoe UI", 9)).grid(
+            row=1, column=0, sticky=tk.W, pady=5, padx=(0, 10)
+        )
         ttk.Entry(frame, textvariable=self._target_var, width=34).grid(
-            row=1, column=1, sticky=tk.EW, pady=4, padx=(0, 6)
+            row=1, column=1, sticky=tk.EW, pady=5, padx=(0, 6)
         )
-        ttk.Button(frame, text="Browse...", command=self._browse).grid(row=1, column=2, pady=4)
+        ttk.Button(frame, text="Browse...", style="Secondary.TButton", command=self._browse).grid(
+            row=1, column=2, pady=5
+        )
 
-        ttk.Label(frame, text="Auto-check:").grid(row=2, column=0, sticky=tk.W, pady=4)
+        tk.Label(frame, text="Auto-check", bg=_BG_MAIN, fg=_TEXT, font=("Segoe UI", 9)).grid(
+            row=2, column=0, sticky=tk.W, pady=5, padx=(0, 10)
+        )
         ttk.Combobox(
             frame,
             textvariable=self._interval_var,
             values=tuple(_INTERVAL_LABELS.values()),
             state="readonly",
             width=18,
-        ).grid(row=2, column=1, sticky=tk.W, pady=4)
+        ).grid(row=2, column=1, sticky=tk.W, pady=5)
 
-        ttk.Checkbutton(frame, text="Enable background monitor", variable=self._enabled_var).grid(
-            row=3, column=1, sticky=tk.W, pady=2
-        )
-        ttk.Checkbutton(frame, text="Include test files", variable=self._tests_var).grid(
-            row=4, column=1, sticky=tk.W, pady=2
-        )
+        ttk.Checkbutton(
+            frame,
+            text="Enable background monitor",
+            variable=self._enabled_var,
+            style="White.TCheckbutton",
+        ).grid(row=3, column=1, sticky=tk.W, pady=3)
+        ttk.Checkbutton(
+            frame,
+            text="Include test files",
+            variable=self._tests_var,
+            style="White.TCheckbutton",
+        ).grid(row=4, column=1, sticky=tk.W, pady=3)
 
-        btn_row = ttk.Frame(frame)
-        btn_row.grid(row=5, column=0, columnspan=3, sticky=tk.E, pady=(12, 0))
-        ttk.Button(btn_row, text="Cancel", command=self.win.destroy).pack(side=tk.RIGHT)
-        ttk.Button(btn_row, text="Save", command=self._save).pack(side=tk.RIGHT, padx=(0, 6))
+        btn_row = tk.Frame(frame, bg=_BG_MAIN)
+        btn_row.grid(row=5, column=0, columnspan=3, sticky=tk.E, pady=(14, 0))
+        ttk.Button(btn_row, text="Cancel", style="Secondary.TButton", command=self.win.destroy).pack(
+            side=tk.RIGHT
+        )
+        ttk.Button(btn_row, text="Save", style="Primary.TButton", command=self._save).pack(
+            side=tk.RIGHT, padx=(0, 6)
+        )
 
         self.win.wait_window()
 
@@ -279,13 +377,14 @@ def _execute_scan(
 
 
 class VibecheckApp:
-    """Native desktop window for running vibecheck scans and scheduled checks."""
+    """Modern light-neutral desktop window for running vibecheck scans."""
 
     def __init__(self, root: tk.Tk, initial_dir: Path | None = None) -> None:
         self.root = root
         self.root.title(f"vibecheck {__version__}")
-        self.root.geometry("1120x660")
-        self.root.minsize(840, 500)
+        self.root.geometry("1160x700")
+        self.root.minsize(880, 540)
+        self.root.configure(bg=_BG_MAIN)
 
         self._last_result: ScanResult | None = None
         self._findings_by_iid: dict[str, Finding] = {}
@@ -297,80 +396,207 @@ class VibecheckApp:
         self._include_tests_var = tk.BooleanVar(value=False)
         self._severity_filter_var = tk.StringVar(value="all")
         self._status_var = tk.StringVar(value="Ready")
-        self._score_var = tk.StringVar(value="Score: --/100")
-        self._vibe_var = tk.StringVar(value="Vibe Signal: --")
 
-        self._configure_theme()
+        self._score_val_var = tk.StringVar(value="--")
+        self._errors_val_var = tk.StringVar(value="--")
+        self._warnings_val_var = tk.StringVar(value="--")
+        self._vibe_val_var = tk.StringVar(value="--")
+
+        self._configure_styles()
         self._build_layout()
         self._refresh_sidebar()
         self.root.after(15_000, self._scheduler_tick)
 
-    def _configure_theme(self) -> None:
+    def _configure_styles(self) -> None:
         style = ttk.Style(self.root)
-        available = set(style.theme_names())
-        if "vista" in available:
-            style.theme_use("vista")
-        elif "winnative" in available:
-            style.theme_use("winnative")
-        else:
-            style.theme_use("clam")
+        style.theme_use("clam")
 
-        style.configure("Treeview", rowheight=23, font=("Segoe UI", 9))
-        style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
+        style.configure("TFrame", background=_BG_MAIN)
+        style.configure("Sidebar.TFrame", background=_BG_SIDEBAR)
+        style.configure("TLabel", background=_BG_MAIN, foreground=_TEXT, font=("Segoe UI", 9))
+        style.configure("White.TCheckbutton", background=_BG_MAIN, foreground=_TEXT, font=("Segoe UI", 9))
+        style.map("White.TCheckbutton", background=[("active", _BG_MAIN)])
+
+        style.configure(
+            "Primary.TButton",
+            background=_PRIMARY,
+            foreground="#ffffff",
+            borderwidth=0,
+            padding=(14, 6),
+            font=("Segoe UI", 9, "bold"),
+        )
+        style.map(
+            "Primary.TButton",
+            background=[("disabled", "#94a3b8"), ("active", _PRIMARY_HOVER)],
+        )
+
+        style.configure(
+            "Secondary.TButton",
+            background=_BG_SUBTLE,
+            foreground=_TEXT,
+            borderwidth=1,
+            bordercolor=_BORDER,
+            padding=(10, 5),
+            font=("Segoe UI", 9),
+        )
+        style.map(
+            "Secondary.TButton",
+            background=[("disabled", "#f1f5f9"), ("active", "#eaeef2")],
+            foreground=[("disabled", "#94a3b8")],
+        )
+
+        style.configure(
+            "Modern.Horizontal.TProgressbar",
+            troughcolor=_BG_SUBTLE,
+            background=_PRIMARY,
+            bordercolor=_BORDER,
+            lightcolor=_PRIMARY,
+            darkcolor=_PRIMARY,
+            thickness=10,
+        )
+
+        style.configure(
+            "Treeview",
+            background=_BG_MAIN,
+            fieldbackground=_BG_MAIN,
+            foreground=_TEXT,
+            rowheight=28,
+            borderwidth=0,
+            font=("Segoe UI", 9),
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=_BG_SUBTLE,
+            foreground=_MUTED,
+            relief=tk.FLAT,
+            borderwidth=0,
+            padding=(8, 6),
+            font=("Segoe UI", 9, "bold"),
+        )
+        style.map("Treeview", background=[("selected", _SEL_BG)], foreground=[("selected", _TEXT)])
+        style.map("Treeview.Heading", background=[("active", "#eaeef2")])
 
     def _build_layout(self) -> None:
-        paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        paned.pack(fill=tk.BOTH, expand=True, padx=8, pady=(8, 2))
+        shell = tk.Frame(self.root, bg=_BG_MAIN)
+        shell.pack(fill=tk.BOTH, expand=True)
 
-        # Left sidebar: Projects & automation
-        sidebar = ttk.Frame(paned, padding=(0, 0, 6, 0))
-        paned.add(sidebar, weight=0)
+        # Left sidebar
+        sidebar = tk.Frame(shell, bg=_BG_SIDEBAR, width=250)
+        sidebar.pack(side=tk.LEFT, fill=tk.Y)
+        sidebar.pack_propagate(False)
 
-        side_header = ttk.Frame(sidebar)
-        side_header.pack(fill=tk.X, pady=(0, 6))
-        ttk.Label(side_header, text="Projects", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+        # 1px vertical hairline divider
+        tk.Frame(shell, bg=_BORDER, width=1).pack(side=tk.LEFT, fill=tk.Y)
 
-        side_btns = ttk.Frame(sidebar)
-        side_btns.pack(fill=tk.X, pady=(0, 6))
-        ttk.Button(side_btns, text="+ Add", width=7, command=self._add_project).pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Button(side_btns, text="Edit", width=6, command=self._edit_project).pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Button(side_btns, text="Remove", width=8, command=self._remove_project).pack(side=tk.LEFT)
+        side_inner = tk.Frame(sidebar, bg=_BG_SIDEBAR, padx=14, pady=14)
+        side_inner.pack(fill=tk.BOTH, expand=True)
 
-        self._project_list = tk.Listbox(sidebar, width=30, activestyle="none", font=("Segoe UI", 9))
+        tk.Label(
+            side_inner,
+            text="PROJECTS",
+            bg=_BG_SIDEBAR,
+            fg=_MUTED,
+            font=("Segoe UI", 8, "bold"),
+            anchor=tk.W,
+        ).pack(fill=tk.X, pady=(0, 8))
+
+        side_btns = tk.Frame(side_inner, bg=_BG_SIDEBAR)
+        side_btns.pack(fill=tk.X, pady=(0, 10))
+        ttk.Button(side_btns, text="+ Add", style="Secondary.TButton", command=self._add_project).pack(
+            side=tk.LEFT, padx=(0, 4)
+        )
+        ttk.Button(side_btns, text="Edit", style="Secondary.TButton", command=self._edit_project).pack(
+            side=tk.LEFT, padx=(0, 4)
+        )
+        ttk.Button(side_btns, text="Remove", style="Secondary.TButton", command=self._remove_project).pack(
+            side=tk.LEFT
+        )
+
+        list_border = tk.Frame(side_inner, bg=_BORDER, padx=1, pady=1)
+        list_border.pack(fill=tk.BOTH, expand=True)
+        self._project_list = tk.Listbox(
+            list_border,
+            bg=_BG_MAIN,
+            fg=_TEXT,
+            selectbackground=_SEL_BG,
+            selectforeground=_TEXT,
+            relief=tk.FLAT,
+            borderwidth=0,
+            highlightthickness=0,
+            activestyle="none",
+            font=("Segoe UI", 9),
+        )
         self._project_list.pack(fill=tk.BOTH, expand=True)
         self._project_list.bind("<<ListboxSelect>>", self._on_select_project)
         self._project_list.bind("<Double-Button-1>", lambda _e: self._start_scan())
 
-        ttk.Label(
-            sidebar,
-            text="Enabled projects auto-scan in the\nbackground and notify only on issues.",
+        tk.Label(
+            side_inner,
+            text="Enabled projects check in the\nbackground and notify on issues.",
+            bg=_BG_SIDEBAR,
+            fg=_MUTED,
             font=("Segoe UI", 8),
-        ).pack(anchor=tk.W, pady=(6, 0))
+            justify=tk.LEFT,
+            anchor=tk.W,
+        ).pack(fill=tk.X, pady=(10, 0))
 
-        # Right main pane
-        main = ttk.Frame(paned, padding=(6, 0, 0, 0))
-        paned.add(main, weight=1)
+        # Right main workspace
+        main = tk.Frame(shell, bg=_BG_MAIN, padx=18, pady=14)
+        main.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        toolbar = ttk.Frame(main)
-        toolbar.pack(fill=tk.X, pady=(0, 6))
+        # Top target bar
+        toolbar = tk.Frame(main, bg=_BG_MAIN)
+        toolbar.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(toolbar, text="Folder or GitHub URL:").pack(side=tk.LEFT, padx=(0, 6))
-        path_entry = ttk.Entry(toolbar, textvariable=self._target_var)
-        path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
-        ttk.Button(toolbar, text="Browse...", command=self._choose_folder).pack(side=tk.LEFT, padx=(0, 6))
-        self._scan_btn = ttk.Button(toolbar, text="Scan", command=self._start_scan)
+        tk.Label(
+            toolbar,
+            text="Target",
+            bg=_BG_MAIN,
+            fg=_TEXT,
+            font=("Segoe UI", 9, "bold"),
+        ).pack(side=tk.LEFT, padx=(0, 8))
+
+        entry_border = tk.Frame(toolbar, bg=_BORDER, padx=1, pady=1)
+        entry_border.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+        path_entry = tk.Entry(
+            entry_border,
+            textvariable=self._target_var,
+            bg=_BG_MAIN,
+            fg=_TEXT,
+            relief=tk.FLAT,
+            font=("Consolas", 9),
+            highlightthickness=0,
+        )
+        path_entry.pack(fill=tk.X, ipady=5, padx=6)
+
+        ttk.Button(toolbar, text="Browse...", style="Secondary.TButton", command=self._choose_folder).pack(
+            side=tk.LEFT, padx=(0, 6)
+        )
+        self._scan_btn = ttk.Button(toolbar, text="Scan", style="Primary.TButton", command=self._start_scan)
         self._scan_btn.pack(side=tk.LEFT)
 
-        options = ttk.Frame(main)
+        # Compact 4-card summary strip
+        cards_row = tk.Frame(main, bg=_BG_MAIN)
+        cards_row.pack(fill=tk.X, pady=(0, 12))
+        self._score_val_lbl = self._make_metric_card(cards_row, "SLOP SCORE", self._score_val_var, padx=(0, 8))
+        self._errors_val_lbl = self._make_metric_card(cards_row, "ERRORS", self._errors_val_var, padx=(0, 8))
+        self._warnings_val_lbl = self._make_metric_card(cards_row, "WARNINGS", self._warnings_val_var, padx=(0, 8))
+        self._vibe_val_lbl = self._make_metric_card(cards_row, "VIBE SIGNAL", self._vibe_val_var, padx=(0, 0))
+
+        # Filter & actions row
+        options = tk.Frame(main, bg=_BG_MAIN)
         options.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Checkbutton(
             options,
             text="Include test files",
             variable=self._include_tests_var,
+            style="White.TCheckbutton",
         ).pack(side=tk.LEFT, padx=(0, 16))
 
-        ttk.Label(options, text="Severity:").pack(side=tk.LEFT, padx=(0, 4))
+        tk.Label(options, text="Severity:", bg=_BG_MAIN, fg=_MUTED, font=("Segoe UI", 9)).pack(
+            side=tk.LEFT, padx=(0, 6)
+        )
         filter_box = ttk.Combobox(
             options,
             textvariable=self._severity_filter_var,
@@ -381,19 +607,29 @@ class VibecheckApp:
         filter_box.pack(side=tk.LEFT)
         filter_box.bind("<<ComboboxSelected>>", lambda _e: self._refresh_table())
 
-        self._export_btn = ttk.Button(options, text="Export JSON...", command=self._export_json, state=tk.DISABLED)
+        self._export_btn = ttk.Button(
+            options,
+            text="Export JSON...",
+            style="Secondary.TButton",
+            command=self._export_json,
+            state=tk.DISABLED,
+        )
         self._export_btn.pack(side=tk.RIGHT)
 
-        self._prompt_btn = ttk.Button(options, text="Fix Prompt...", command=self._show_fix_prompt, state=tk.DISABLED)
+        self._prompt_btn = ttk.Button(
+            options,
+            text="Fix Prompt...",
+            style="Secondary.TButton",
+            command=self._show_fix_prompt,
+            state=tk.DISABLED,
+        )
         self._prompt_btn.pack(side=tk.RIGHT, padx=(0, 6))
 
-        self._vibe_label = ttk.Label(options, textvariable=self._vibe_var, font=("Segoe UI", 9))
-        self._vibe_label.pack(side=tk.RIGHT, padx=(0, 10))
+        # Findings table inside 1px border
+        table_border = tk.Frame(main, bg=_BORDER, padx=1, pady=1)
+        table_border.pack(fill=tk.BOTH, expand=True)
 
-        self._score_label = ttk.Label(options, textvariable=self._score_var, font=("Segoe UI", 9, "bold"))
-        self._score_label.pack(side=tk.RIGHT, padx=(0, 10))
-
-        table_frame = ttk.Frame(main)
+        table_frame = tk.Frame(table_border, bg=_BG_MAIN)
         table_frame.pack(fill=tk.BOTH, expand=True)
 
         columns = ("severity", "rule", "location", "message")
@@ -403,16 +639,16 @@ class VibecheckApp:
         self._tree.heading("location", text="File : Line")
         self._tree.heading("message", text="Message")
 
-        self._tree.column("severity", width=75, anchor=tk.CENTER, stretch=False)
-        self._tree.column("rule", width=65, anchor=tk.CENTER, stretch=False)
-        self._tree.column("location", width=230, anchor=tk.W, stretch=False)
-        self._tree.column("message", width=500, anchor=tk.W, stretch=True)
+        self._tree.column("severity", width=80, anchor=tk.CENTER, stretch=False)
+        self._tree.column("rule", width=70, anchor=tk.CENTER, stretch=False)
+        self._tree.column("location", width=240, anchor=tk.W, stretch=False)
+        self._tree.column("message", width=480, anchor=tk.W, stretch=True)
 
-        self._tree.tag_configure("odd", background="#f8fafc")
-        self._tree.tag_configure("even", background="#ffffff")
-        self._tree.tag_configure("error", foreground="#b91c1c")
-        self._tree.tag_configure("warning", foreground="#92400e")
-        self._tree.tag_configure("info", foreground="#1d4ed8")
+        self._tree.tag_configure("odd", background=_BG_SUBTLE)
+        self._tree.tag_configure("even", background=_BG_MAIN)
+        self._tree.tag_configure("error", foreground=_ERR)
+        self._tree.tag_configure("warning", foreground=_WARN)
+        self._tree.tag_configure("info", foreground=_PRIMARY)
 
         y_scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self._tree.yview)
         self._tree.configure(yscrollcommand=y_scroll.set)
@@ -420,23 +656,82 @@ class VibecheckApp:
         y_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self._tree.bind("<<TreeviewSelect>>", self._on_select_row)
 
-        details = ttk.LabelFrame(main, text="Details", padding=6)
-        details.pack(fill=tk.X, pady=(8, 4))
+        # Details card
+        detail_border = tk.Frame(main, bg=_BORDER, padx=1, pady=1)
+        detail_border.pack(fill=tk.X, pady=(10, 0))
+        details = tk.Frame(detail_border, bg=_BG_SUBTLE, padx=10, pady=8)
+        details.pack(fill=tk.X)
+
         self._snippet_var = tk.StringVar(value="Select a row to inspect the code snippet.")
         self._hint_var = tk.StringVar(value="")
-        ttk.Label(details, textvariable=self._snippet_var, font=("Consolas", 9)).pack(anchor=tk.W)
-        ttk.Label(details, textvariable=self._hint_var, font=("Segoe UI", 9)).pack(anchor=tk.W)
+        tk.Label(
+            details,
+            textvariable=self._snippet_var,
+            bg=_BG_SUBTLE,
+            fg=_TEXT,
+            font=("Consolas", 9),
+            anchor=tk.W,
+        ).pack(fill=tk.X)
+        tk.Label(
+            details,
+            textvariable=self._hint_var,
+            bg=_BG_SUBTLE,
+            fg=_MUTED,
+            font=("Segoe UI", 9),
+            anchor=tk.W,
+        ).pack(fill=tk.X)
 
-        status_bar = ttk.Frame(self.root, relief=tk.SUNKEN, padding=(8, 2))
+        # Bottom status bar
+        tk.Frame(self.root, bg=_BORDER, height=1).pack(fill=tk.X, side=tk.BOTTOM)
+        status_bar = tk.Frame(self.root, bg=_BG_SIDEBAR, padx=14, pady=4)
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
-        ttk.Label(status_bar, textvariable=self._status_var, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+        tk.Label(
+            status_bar,
+            textvariable=self._status_var,
+            bg=_BG_SIDEBAR,
+            fg=_MUTED,
+            font=("Segoe UI", 8),
+            anchor=tk.W,
+        ).pack(side=tk.LEFT)
+
+    def _make_metric_card(
+        self,
+        parent: tk.Frame,
+        title: str,
+        var: tk.StringVar,
+        *,
+        padx: tuple[int, int],
+    ) -> tk.Label:
+        border = tk.Frame(parent, bg=_BORDER, padx=1, pady=1)
+        border.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=padx)
+        card = tk.Frame(border, bg=_BG_CARD, padx=12, pady=8)
+        card.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            card,
+            text=title,
+            bg=_BG_CARD,
+            fg=_MUTED,
+            font=("Segoe UI", 8, "bold"),
+            anchor=tk.W,
+        ).pack(fill=tk.X)
+        val_lbl = tk.Label(
+            card,
+            textvariable=var,
+            bg=_BG_CARD,
+            fg=_TEXT,
+            font=("Segoe UI", 13, "bold"),
+            anchor=tk.W,
+        )
+        val_lbl.pack(fill=tk.X)
+        return val_lbl
 
     def _refresh_sidebar(self) -> None:
         self._project_list.delete(0, tk.END)
         for p in self._projects:
             tag = f"{p.interval_minutes}m" if (p.enabled and p.interval_minutes > 0) else "manual"
-            score = f" [{p.last_score}/100]" if p.last_score is not None else ""
-            self._project_list.insert(tk.END, f"[{tag}] {p.name}{score}")
+            score = f"  ({p.last_score}/100)" if p.last_score is not None else ""
+            self._project_list.insert(tk.END, f" {p.name}  [{tag}]{score}")
 
     def _add_project(self) -> None:
         dlg = _ProjectDialog(self.root)
@@ -545,16 +840,20 @@ class VibecheckApp:
         self._prompt_btn.configure(state=tk.NORMAL if result.findings else tk.DISABLED)
 
         score = result.slop_score
-        self._score_var.set(f"Slop Score: {score}/100")
-        self._vibe_var.set(f"Vibe Signal: {result.vibe_likelihood}")
-        if score == 0:
-            self._score_label.configure(foreground="#15803d")
-        elif score <= 25:
-            self._score_label.configure(foreground="#b45309")
-        else:
-            self._score_label.configure(foreground="#b91c1c")
+        counts = result.counts_by_severity()
 
-        # Update matching saved project score if present.
+        self._score_val_var.set(f"{score}/100")
+        self._errors_val_var.set(str(counts[Severity.ERROR]))
+        self._warnings_val_var.set(str(counts[Severity.WARNING]))
+        self._vibe_val_var.set(result.vibe_likelihood)
+
+        self._score_val_lbl.configure(fg=_OK if score == 0 else (_WARN if score <= 25 else _ERR))
+        self._errors_val_lbl.configure(fg=_ERR if counts[Severity.ERROR] > 0 else _TEXT)
+        self._warnings_val_lbl.configure(fg=_WARN if counts[Severity.WARNING] > 0 else _TEXT)
+        self._vibe_val_lbl.configure(
+            fg=_ERR if result.vibe_likelihood == "High" else (_WARN if result.vibe_likelihood == "Medium" else _OK)
+        )
+
         now_str = datetime.now().strftime("%H:%M")
         updated = False
         for proj in self._projects:
@@ -566,15 +865,13 @@ class VibecheckApp:
             save_projects(self._projects)
             self._refresh_sidebar()
 
-        counts = result.counts_by_severity()
         status = (
-            f"Scanned {result.files_scanned} file(s) ({result.files_skipped} skipped) | "
-            f"{counts[Severity.ERROR]} error(s), {counts[Severity.WARNING]} warning(s), {counts[Severity.INFO]} info"
+            f"Scanned {result.files_scanned} file(s) ({result.files_skipped} skipped)"
         )
         if score > 25:
-            status += " | High score: click 'Fix Prompt...' to copy a repair prompt."
+            status += "  |  High score: click 'Fix Prompt...' to copy a repair prompt."
         if result.errors:
-            status += f" | {result.errors[0]}"
+            status += f"  |  {result.errors[0]}"
         self._status_var.set(status)
         self._refresh_table()
 
@@ -612,7 +909,6 @@ class VibecheckApp:
         save_projects(self._projects)
         self._refresh_sidebar()
 
-        # Silent when clean; notify only when issues are detected.
         if result.findings:
             send_windows_notification(
                 f"vibecheck: {proj.name}",
@@ -684,6 +980,7 @@ class VibecheckApp:
 
 def launch_gui(initial_dir: Path | None = None) -> int:
     """Start the Tkinter GUI application."""
+    _enable_high_dpi()
     root = tk.Tk()
     VibecheckApp(root, initial_dir=initial_dir)
     root.mainloop()
