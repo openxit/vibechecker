@@ -104,6 +104,20 @@ class ScanResult:
         normalized = round((raw_penalty / normalizer) * 10)
         return min(100, normalized)
 
+    @property
+    def vibe_likelihood(self) -> str:
+        """Heuristic likelihood ('Low', 'Medium', 'High') that code exhibits generated patterns."""
+        if self.files_scanned == 0 or not self.findings:
+            return "Low"
+        signal_rules = {"VC001", "VC002", "VC003", "VC007", "VC008", "VC009"}
+        signal_count = sum(1 for f in self.findings if f.rule_id in signal_rules)
+        score = self.slop_score
+        if score >= 30 or signal_count >= 5:
+            return "High"
+        if score >= 10 or signal_count >= 2:
+            return "Medium"
+        return "Low"
+
     def counts_by_severity(self) -> dict[Severity, int]:
         """Count findings grouped by severity."""
         counts = {Severity.ERROR: 0, Severity.WARNING: 0, Severity.INFO: 0}

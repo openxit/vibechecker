@@ -99,7 +99,7 @@ def format_text(result: ScanResult, *, use_color: bool) -> str:
         f"{counts[Severity.INFO]} info"
     )
     out.append(summary)
-    out.append(f"Slop Score: {_score_bar(result.slop_score, pal)}")
+    out.append(f"Slop Score: {_score_bar(result.slop_score, pal)} | Vibe Signal: {result.vibe_likelihood}")
     return "\n".join(out)
 
 
@@ -111,6 +111,7 @@ def format_json(result: ScanResult) -> str:
         "files_scanned": result.files_scanned,
         "files_skipped": result.files_skipped,
         "slop_score": result.slop_score,
+        "vibe_likelihood": result.vibe_likelihood,
         "summary": {sev.value: count for sev, count in counts.items()},
         "errors": result.errors,
         "findings": [
@@ -151,6 +152,9 @@ _RULE_FIX_GUIDANCE: dict[str, str] = {
     "VC004": "Handle exceptions explicitly with context or re-raise instead of silently swallowing them.",
     "VC005": "Verify every flagged import: install/declare valid dependencies in pyproject.toml/package.json or remove hallucinated packages.",
     "VC006": "Remove mock/dummy variables and placeholder credentials from non-test source files; load secrets from environment variables.",
+    "VC007": "Remove redundant narrating comments that only restate the next line of code.",
+    "VC008": "Remove unused top-level helper functions or wire them into the active code path.",
+    "VC009": "Replace generated placeholder names, sample domains, or filler text with real config or test fixtures.",
 }
 
 

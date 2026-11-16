@@ -147,6 +147,29 @@ if TYPE_CHECKING:
         vc006 = [msg for rid, msg in findings if rid == "VC006"]
         self.assertEqual(len(vc006), 2)
 
+    def test_vc007_vc008_vc009_vibe_signals(self) -> None:
+        findings = self._scan_files(
+            {
+                "a.py": """
+def used_helper(x: int) -> int:
+    # Initialize the result
+    val = x + 1
+    return val
+
+def main() -> int:
+    return used_helper(5)
+""",
+                "b.py": """
+def unused_orphan(x: int) -> str:
+    return "Contact John Doe at https://example.com"
+""",
+            }
+        )
+        rule_ids = [rid for rid, _ in findings]
+        self.assertIn("VC007", rule_ids)
+        self.assertIn("VC008", rule_ids)
+        self.assertIn("VC009", rule_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

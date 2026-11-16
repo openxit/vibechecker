@@ -11,6 +11,7 @@ from vibecheck import __version__
 from vibecheck.config import DEFAULT_CONFIG_TEMPLATE, load_config
 from vibecheck.formatters import format_fix_prompt, format_github, format_json, format_text
 from vibecheck.models import ScanResult, Severity
+from vibecheck.remote import parse_github_target, scan_github_repo
 from vibecheck.rules import RULES
 from vibecheck.scanner import scan_path
 
@@ -147,18 +148,35 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "init":
         return _cmd_init(Path(args.path), args.force)
 
-    target = Path(args.target).resolve()
     fail_on = Severity(args.fail_on) if args.fail_on else None
-    config = load_config(
-        target,
-        disabled_rules=frozenset(r.upper() for r in args.disable),
-        extra_ignore=tuple(args.ignore),
-        fail_on=fail_on,
-        max_score=args.max_score,
-        include_tests=args.include_tests,
-    )
+    disabled = frozenset(r.upper() for r in args.disable)
+    ignores = tuple(args.ignore)
 
-    result = scan_path(target, config)
+    gh_target = parse_github_target(args.target)
+    if gh_target is not None:
+        result = scan_github_repo(
+            gh_target,
+            disabled_rules=disabled,
+            extra_ignore=ignores,
+            fail_on=fail_on,
+            max_score=args.max_score,
+            include_tests=args.include_tests,
+        )
+        effective_fail_on = fail_on
+        effective_max_score = args.max_score
+    else:
+        target = Path(args.target).resolve()
+        config = load_config(
+            target,
+            disabled_rules=disabled,
+            extra_ignore=ignores,
+            fail_on=fail_on,
+            max_score=args.max_score,
+            include_tests=args.include_tests,
+        )
+        result = scan_path(target, config)
+        effective_fail_on = config.fail_on
+        effective_max_score = config.max_score
 
     use_color = (
         not args.no_color
@@ -178,6 +196,6 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(format_text(result, use_color=use_color))
 
-    if _should_fail(result, config.fail_on, config.max_score):
+    if _should_fail(result, effective_fail_on, effective_max_score):
         return 1
     return 0

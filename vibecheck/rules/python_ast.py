@@ -37,6 +37,16 @@ _FAKE_SECRET_RE = re.compile(
 
 _MOCK_VAR_RE = re.compile(r"^(?:mock|dummy|fake)_[a-z0-9_]+$", re.IGNORECASE)
 
+_NARRATING_COMMENT_RE = re.compile(
+    r"^(?:initialize|create|set|define|loop\s+through|iterate\s+over|return\s+the|check\s+if|increment|decrement|import\s+(?:the\s+)?necessary)\b",
+    re.IGNORECASE,
+)
+
+_BOILERPLATE_PLACEHOLDER_RE = re.compile(
+    r"\b(?:john\s+doe|jane\s+doe|lorem\s+ipsum|acme\s+corp|foo@bar\.com)\b|https?://(?:www\.)?example\.com\b",
+    re.IGNORECASE,
+)
+
 # Common PyPI distribution name -> top-level import name mappings.
 _PACKAGE_IMPORT_ALIASES: dict[str, tuple[str, ...]] = {
     "pillow": ("PIL",),
@@ -65,6 +75,26 @@ class FunctionFingerprint:
     path: Path
     line: int
     snippet: str
+
+
+@dataclass(frozen=True, slots=True)
+class TopLevelFunction:
+    """Top-level function metadata used for cross-file dead-helper detection."""
+
+    name: str
+    path: Path
+    line: int
+    snippet: str
+
+
+@dataclass(frozen=True, slots=True)
+class PythonFileAnalysis:
+    """Result of analyzing a single Python file."""
+
+    findings: list[Finding]
+    fingerprints: list[FunctionFingerprint]
+    top_level_functions: list[TopLevelFunction]
+    referenced_names: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,10 +358,12 @@ def analyze_python_file(
     *,
     is_test: bool,
     py_ctx: ProjectPythonContext,
-) -> tuple[list[Finding], list[FunctionFingerprint]]:
-    """Analyze a single Python file and return findings plus function fingerprints."""
+) -> PythonFileAnalysis:
+    """Analyze a single Python file and return findings plus cross-file metadata."""
     findings: list[Finding] = []
     fingerprints: list[FunctionFingerprint] = []
+    top_level_functions: list[TopLevelFunction] = []
+    referenced_names: set[str] = set()
     lines = source.splitlines()
 
     # 1. Comment scan via tokenize (never matches inside string literals).
@@ -342,8 +374,8 @@ def analyze_python_file(
                 comment_text = tok.string.lstrip("#").strip()
                 if "vibecheck:" in comment_text.lower():
                     continue
+                line_no = tok.start[0]
                 if _PLACEHOLDER_COMMENT_RE.search(comment_text):
-                    line_no = tok.start[0]
                     findings.append(
                         Finding(
                             rule_id="VC002",
@@ -353,7 +385,20 @@ def analyze_python_file(
                             column=tok.start[1] + 1,
                             message=f"Placeholder comment left in code: {comment_text[:70]}",
                             snippet=get_line_snippet(lines, line_no),
-                            hint="Complete the implementation or remove stale AI instructions.",
+                            hint="Complete the implementation or remove stale placeholder comments.",
+                        )
+                    )
+                elif _NARRATING_COMMENT_RE.match(comment_text) and len(comment_text) <= 60:
+                    findings.append(
+                        Finding(
+                            rule_id="VC007",
+                            severity=Severity.INFO,
+                            path=path,
+                            line=line_no,
+                            column=tok.start[1] + 1,
+                            message=f"Narrating comment restates obvious code: {comment_text[:70]}",
+                            snippet=get_line_snippet(lines, line_no),
+                            hint="Remove redundant 'what' comments; explain 'why' only when non-obvious.",
                         )
                     )
     except tokenize.TokenError:
@@ -374,7 +419,12 @@ def analyze_python_file(
                 snippet=get_line_snippet(lines, exc.lineno or 1),
             )
         )
-        return findings, fingerprints
+        return PythonFileAnalysis(
+            findings=findings,
+            fingerprints=fingerprints,
+            top_level_functions=top_level_functions,
+            referenced_names=frozenset(),
+        )
 
     # Track parent class to skip Protocol methods.
     parent_map: dict[int, ast.AST] = {}
@@ -385,7 +435,44 @@ def analyze_python_file(
     ignored_import_lines = _collect_ignored_import_lines(tree)
     stdlib_modules = {m.lower() for m in sys.stdlib_module_names}
 
+    # Collect __all__ exports so intentionally exported helpers are not flagged by VC008.
+    exported_names: set[str] = set()
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Assign):
+            for tgt in stmt.targets:
+                if isinstance(tgt, ast.Name) and tgt.id == "__all__" and isinstance(stmt.value, (ast.List, ast.Tuple)):
+                    for elt in stmt.value.elts:
+                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                            exported_names.add(elt.value)
+
+    for stmt in tree.body:
+        if (
+            not is_test
+            and isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and not stmt.decorator_list
+            and not stmt.name.startswith(("__", "test_"))
+            and stmt.name not in {"main"}
+            and stmt.name not in exported_names
+        ):
+            top_level_functions.append(
+                TopLevelFunction(
+                    name=stmt.name,
+                    path=path,
+                    line=stmt.lineno,
+                    snippet=get_line_snippet(lines, stmt.lineno),
+                )
+            )
+
     for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            referenced_names.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            referenced_names.add(node.attr)
+        elif isinstance(node, ast.alias):
+            referenced_names.add(node.asname or node.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                referenced_names.add(alias.name)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             parent = parent_map.get(id(node))
             if isinstance(parent, ast.ClassDef) and _is_protocol_class(parent):
@@ -533,5 +620,23 @@ def analyze_python_file(
                         hint="Load credentials from environment variables or a secret manager.",
                     )
                 )
+            elif len(val) <= 160 and "(?:" not in val and _BOILERPLATE_PLACEHOLDER_RE.search(val):
+                findings.append(
+                    Finding(
+                        rule_id="VC009",
+                        severity=Severity.WARNING,
+                        path=path,
+                        line=node.lineno,
+                        column=node.col_offset + 1,
+                        message="Generated boilerplate placeholder string left in non-test source.",
+                        snippet=get_line_snippet(lines, node.lineno),
+                        hint="Replace example/dummy entity strings with real configuration or test fixtures.",
+                    )
+                )
 
-    return findings, fingerprints
+    return PythonFileAnalysis(
+        findings=findings,
+        fingerprints=fingerprints,
+        top_level_functions=top_level_functions,
+        referenced_names=frozenset(referenced_names),
+    )

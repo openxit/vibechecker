@@ -41,6 +41,24 @@ RULES: dict[str, RuleMeta] = {
         default_severity=Severity.WARNING,
         summary="Hardcoded mock/dummy data or placeholder credential detected in non-test code.",
     ),
+    "VC007": RuleMeta(
+        rule_id="VC007",
+        name="narrating-comment",
+        default_severity=Severity.INFO,
+        summary="Redundant comment that merely restates obvious syntax on the next line.",
+    ),
+    "VC008": RuleMeta(
+        rule_id="VC008",
+        name="dead-helper",
+        default_severity=Severity.WARNING,
+        summary="Top-level function is never called or referenced anywhere in the scanned project.",
+    ),
+    "VC009": RuleMeta(
+        rule_id="VC009",
+        name="boilerplate-placeholder",
+        default_severity=Severity.WARNING,
+        summary="Generated placeholder name, sample domain, or filler text in non-test code.",
+    ),
 }
 
 

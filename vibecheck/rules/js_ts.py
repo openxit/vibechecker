@@ -44,6 +44,16 @@ _FAKE_SECRET_RE = re.compile(
     re.IGNORECASE,
 )
 
+_NARRATING_COMMENT_RE = re.compile(
+    r"^(?:initialize|create|set|define|loop\s+through|iterate\s+over|return\s+the|check\s+if|increment|decrement|import\s+(?:the\s+)?necessary)\b",
+    re.IGNORECASE,
+)
+
+_BOILERPLATE_PLACEHOLDER_RE = re.compile(
+    r"""['"][^'"]*(?:\b(?:john\s+doe|jane\s+doe|lorem\s+ipsum|acme\s+corp|foo@bar\.com)\b|https?://(?:www\.)?example\.com\b)[^'"]*['"]""",
+    re.IGNORECASE,
+)
+
 _NODE_BUILTINS = frozenset(
     {
         "assert", "buffer", "child_process", "cluster", "console", "crypto",
@@ -174,7 +184,20 @@ def analyze_js_ts_file(
                     column=1,
                     message=f"Placeholder comment left in code: {comment[:70]}",
                     snippet=get_line_snippet(lines, line_no),
-                    hint="Complete the implementation or remove stale AI instructions.",
+                    hint="Complete the implementation or remove stale placeholder comments.",
+                )
+            )
+        elif _NARRATING_COMMENT_RE.match(comment) and len(comment) <= 60:
+            findings.append(
+                Finding(
+                    rule_id="VC007",
+                    severity=Severity.INFO,
+                    path=path,
+                    line=line_no,
+                    column=1,
+                    message=f"Narrating comment restates obvious code: {comment[:70]}",
+                    snippet=get_line_snippet(lines, line_no),
+                    hint="Remove redundant 'what' comments; explain 'why' only when non-obvious.",
                 )
             )
 
@@ -280,6 +303,19 @@ def analyze_js_ts_file(
                     line=line_no,
                     column=1,
                     message="Placeholder credential or API key string left in source code.",
+                    snippet=get_line_snippet(lines, line_no),
+                )
+            )
+        for match in _BOILERPLATE_PLACEHOLDER_RE.finditer(source):
+            line_no = _line_at_offset(source, match.start())
+            findings.append(
+                Finding(
+                    rule_id="VC009",
+                    severity=Severity.WARNING,
+                    path=path,
+                    line=line_no,
+                    column=1,
+                    message="Generated boilerplate placeholder string left in non-test source.",
                     snippet=get_line_snippet(lines, line_no),
                 )
             )

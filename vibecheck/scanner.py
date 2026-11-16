@@ -17,6 +17,7 @@ from vibecheck.models import Config, Finding, ScanResult, Severity
 from vibecheck.rules.js_ts import analyze_js_ts_file, build_js_context
 from vibecheck.rules.python_ast import (
     FunctionFingerprint,
+    TopLevelFunction,
     analyze_python_file,
     build_python_context,
 )
@@ -66,6 +67,8 @@ def scan_path(
     js_ctx = build_js_context(config.root)
 
     all_fingerprints: list[FunctionFingerprint] = []
+    all_top_level_fns: list[TopLevelFunction] = []
+    all_referenced_names: set[str] = set()
     file_suppressions: dict[Path, dict[int, frozenset[str] | None]] = {}
     raw_findings: list[Finding] = []
 
@@ -97,14 +100,16 @@ def scan_path(
 
         ext = file_path.suffix.lower()
         if ext in _PYTHON_EXTS:
-            file_findings, fps = analyze_python_file(
+            py_res = analyze_python_file(
                 file_path,
                 source,
                 is_test=test_file,
                 py_ctx=py_ctx,
             )
-            raw_findings.extend(file_findings)
-            all_fingerprints.extend(fps)
+            raw_findings.extend(py_res.findings)
+            all_fingerprints.extend(py_res.fingerprints)
+            all_top_level_fns.extend(py_res.top_level_functions)
+            all_referenced_names.update(py_res.referenced_names)
         elif ext in _JS_TS_EXTS:
             file_findings = analyze_js_ts_file(
                 file_path,
@@ -144,6 +149,23 @@ def scan_path(
                     hint="Extract a shared helper instead of duplicating logic.",
                 )
             )
+
+    # Cross-file dead helper detection (VC008) when scanning a multi-file project
+    if resolved.is_dir() and result.files_scanned >= 2:
+        for fn in all_top_level_fns:
+            if fn.name not in all_referenced_names:
+                raw_findings.append(
+                    Finding(
+                        rule_id="VC008",
+                        severity=Severity.WARNING,
+                        path=fn.path,
+                        line=fn.line,
+                        column=1,
+                        message=f"Top-level function '{fn.name}' is never called or referenced in this project.",
+                        snippet=fn.snippet,
+                        hint="Remove unused helper functions or wire them into the active code path.",
+                    )
+                )
 
     # Filter disabled rules and inline suppressions, then sort deterministically.
     filtered: list[Finding] = []
