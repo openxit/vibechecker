@@ -12,13 +12,9 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from vibecheck import __version__
-from vibecheck.config import load_config
-from vibecheck.formatters import format_fix_prompt, format_json
 from vibecheck.models import Finding, ScanResult, Severity
 from vibecheck.notify import send_windows_notification
 from vibecheck.projects import ProjectProfile, load_projects, save_projects
-from vibecheck.remote import parse_github_target, scan_github_repo
-from vibecheck.scanner import scan_path
 
 _INTERVAL_LABELS = {
     0: "Manual",
@@ -327,6 +323,8 @@ class _ProjectDialog:
             messagebox.showerror("Missing target", "Enter a local folder or GitHub URL.", parent=self.win)
             return
         if not name:
+            from vibecheck.remote import parse_github_target
+
             gh = parse_github_target(target)
             name = gh.slug if gh else (Path(target).name or target)
 
@@ -356,6 +354,10 @@ def _execute_scan(
     status_callback=None,
 ) -> ScanResult:
     """Run either a GitHub archive scan or a local directory/file scan."""
+    from vibecheck.config import load_config
+    from vibecheck.remote import parse_github_target, scan_github_repo
+    from vibecheck.scanner import scan_path
+
     gh_target = parse_github_target(target_str)
     if gh_target is not None:
         return scan_github_repo(
@@ -781,6 +783,8 @@ class VibecheckApp:
             self._target_var.set(selected)
 
     def _start_scan(self) -> None:
+        from vibecheck.remote import parse_github_target
+
         target_str = self._target_var.get().strip()
         if not target_str:
             messagebox.showerror("Invalid target", "Enter a local folder or GitHub repository URL.")
@@ -962,6 +966,8 @@ class VibecheckApp:
     def _export_json(self) -> None:
         if self._last_result is None:
             return
+        from vibecheck.formatters import format_json
+
         dest = filedialog.asksaveasfilename(
             defaultextension=".json",
             filetypes=[("JSON files", "*.json")],
@@ -975,6 +981,8 @@ class VibecheckApp:
     def _show_fix_prompt(self) -> None:
         if self._last_result is None or not self._last_result.findings:
             return
+        from vibecheck.formatters import format_fix_prompt
+
         _FixPromptDialog(self.root, format_fix_prompt(self._last_result))
 
 

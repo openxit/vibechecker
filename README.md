@@ -6,7 +6,7 @@
 
 ## Features
 
-- **Desktop App & CLI (`vibecheck.exe`):** Double-click `vibecheck.exe` (from [GitHub Releases](../../releases)) to open the native Windows GUI without a terminal window or Python installation. Pass arguments to run it headlessly in CI/CD or the terminal.
+- **Desktop App & CLI (`vibecheck.exe`):** Download `vibecheck-windows-x64.zip` from [GitHub Releases](../../releases) (recommended for instant startup) or the standalone `vibecheck.exe`, and launch the native Windows GUI without a terminal window or Python installation. Pass arguments to run it headlessly in CI/CD or the terminal.
 - **Direct GitHub Repository Scanning:** Paste any GitHub URL (e.g. `https://github.com/owner/repo`) or `owner/repo` shorthand into the GUI or CLI to fetch and scan the archive without cloning manually.
 - **Projects Sidebar & Background Monitor:** Save local folders or GitHub repositories in the left sidebar with configurable check intervals (5, 15, 30, or 60 minutes). Background checks stay silent when clean and trigger a Windows notification when issues are detected.
 - **Live Scan Progress:** Modal progress dialog with determinate progress bar, file counter, current file path, and cancel support.
