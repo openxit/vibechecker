@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-windows-exe:
+  build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,16 +23,46 @@ jobs:
           python -m unittest discover -s tests -v
           python -m vibecheck . --no-color --fail-on info
 
-      - name: Build vibecheck Windows bundles
+      - name: Build Windows bundles
         run: |
           python -m pip install --upgrade pip pyinstaller
           python -m PyInstaller --onedir --noconsole --clean --name vibecheck vibecheck/__main__.py
           Compress-Archive -Path dist/vibecheck/* -DestinationPath dist/vibecheck-windows-x64.zip
           python -m PyInstaller --onefile --noconsole --clean --name vibecheck vibecheck/__main__.py
 
-      - name: Upload release assets
+      - name: Upload Windows release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/vibecheck-windows-x64.zip
             dist/vibecheck.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Tk runtime for GUI bundling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk
+
+      - name: Run tests and self-scan
+        run: |
+          python -m unittest discover -s tests -v
+          python -m vibecheck . --no-color --fail-on info
+
+      - name: Build Linux bundle
+        run: |
+          python -m pip install --upgrade pip pyinstaller
+          python -m PyInstaller --onedir --clean --name vibecheck vibecheck/__main__.py
+          tar -czf dist/vibecheck-linux-x64.tar.gz -C dist vibecheck
+
+      - name: Upload Linux release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/vibecheck-linux-x64.tar.gz

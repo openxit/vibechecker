@@ -13,8 +13,11 @@ from tkinter import filedialog, messagebox, ttk
 
 from vibecheck import __version__
 from vibecheck.models import Finding, ScanResult, Severity
-from vibecheck.notify import send_windows_notification
+from vibecheck.notify import send_notification
 from vibecheck.projects import ProjectProfile, load_projects, save_projects
+
+_UI_FONT = "Segoe UI" if sys.platform == "win32" else ("Helvetica Neue" if sys.platform == "darwin" else "DejaVu Sans")
+_MONO_FONT = "Consolas" if sys.platform == "win32" else ("Menlo" if sys.platform == "darwin" else "DejaVu Sans Mono")
 
 _INTERVAL_LABELS = {
     0: "Manual",
@@ -74,7 +77,7 @@ class _ScanProgressDialog:
             textvariable=self._count_var,
             bg=_BG_MAIN,
             fg=_TEXT,
-            font=("Segoe UI", 10, "bold"),
+            font=(_UI_FONT, 10, "bold"),
             anchor=tk.W,
         ).pack(fill=tk.X, pady=(0, 8))
 
@@ -93,7 +96,7 @@ class _ScanProgressDialog:
             textvariable=self._file_var,
             bg=_BG_MAIN,
             fg=_MUTED,
-            font=("Consolas", 9),
+            font=(_MONO_FONT, 9),
             width=54,
             anchor=tk.W,
         ).pack(fill=tk.X, pady=(0, 14))
@@ -167,7 +170,7 @@ class _FixPromptDialog:
             text="Copy this prompt into your editor or assistant to resolve the findings:",
             bg=_BG_MAIN,
             fg=_TEXT,
-            font=("Segoe UI", 9),
+            font=(_UI_FONT, 9),
             anchor=tk.W,
         ).pack(fill=tk.X, pady=(0, 8))
 
@@ -180,7 +183,7 @@ class _FixPromptDialog:
         text_box = tk.Text(
             text_frame,
             wrap=tk.WORD,
-            font=("Consolas", 9),
+            font=(_MONO_FONT, 9),
             bg=_BG_SUBTLE,
             fg=_TEXT,
             relief=tk.FLAT,
@@ -203,7 +206,7 @@ class _FixPromptDialog:
             textvariable=self._copied_var,
             bg=_BG_MAIN,
             fg=_OK,
-            font=("Segoe UI", 9),
+            font=(_UI_FONT, 9),
         ).pack(side=tk.LEFT)
         ttk.Button(btn_row, text="Close", style="Secondary.TButton", command=self.win.destroy).pack(
             side=tk.RIGHT
@@ -425,7 +428,7 @@ class VibecheckApp:
             foreground="#ffffff",
             borderwidth=0,
             padding=(14, 6),
-            font=("Segoe UI", 9, "bold"),
+            font=(_UI_FONT, 9, "bold"),
         )
         style.map(
             "Primary.TButton",
@@ -439,7 +442,7 @@ class VibecheckApp:
             borderwidth=1,
             bordercolor=_BORDER,
             padding=(10, 5),
-            font=("Segoe UI", 9),
+            font=(_UI_FONT, 9),
         )
         style.map(
             "Secondary.TButton",
@@ -464,7 +467,7 @@ class VibecheckApp:
             foreground=_TEXT,
             rowheight=28,
             borderwidth=0,
-            font=("Segoe UI", 9),
+            font=(_UI_FONT, 9),
         )
         style.configure(
             "Treeview.Heading",
@@ -473,7 +476,7 @@ class VibecheckApp:
             relief=tk.FLAT,
             borderwidth=0,
             padding=(8, 6),
-            font=("Segoe UI", 9, "bold"),
+            font=(_UI_FONT, 9, "bold"),
         )
         style.map("Treeview", background=[("selected", _SEL_BG)], foreground=[("selected", _TEXT)])
         style.map("Treeview.Heading", background=[("active", "#eaeef2")])
@@ -498,7 +501,7 @@ class VibecheckApp:
             text="PROJECTS",
             bg=_BG_SIDEBAR,
             fg=_MUTED,
-            font=("Segoe UI", 8, "bold"),
+            font=(_UI_FONT, 8, "bold"),
             anchor=tk.W,
         ).pack(fill=tk.X, pady=(0, 8))
 
@@ -526,7 +529,7 @@ class VibecheckApp:
             borderwidth=0,
             highlightthickness=0,
             activestyle="none",
-            font=("Segoe UI", 9),
+            font=(_UI_FONT, 9),
         )
         self._project_list.pack(fill=tk.BOTH, expand=True)
         self._project_list.bind("<<ListboxSelect>>", self._on_select_project)
@@ -537,7 +540,7 @@ class VibecheckApp:
             text="Enabled projects check in the\nbackground and notify on issues.",
             bg=_BG_SIDEBAR,
             fg=_MUTED,
-            font=("Segoe UI", 8),
+            font=(_UI_FONT, 8),
             justify=tk.LEFT,
             anchor=tk.W,
         ).pack(fill=tk.X, pady=(10, 0))
@@ -555,7 +558,7 @@ class VibecheckApp:
             text="Target",
             bg=_BG_MAIN,
             fg=_TEXT,
-            font=("Segoe UI", 9, "bold"),
+            font=(_UI_FONT, 9, "bold"),
         ).pack(side=tk.LEFT, padx=(0, 8))
 
         entry_border = tk.Frame(toolbar, bg=_BORDER, padx=1, pady=1)
@@ -566,7 +569,7 @@ class VibecheckApp:
             bg=_BG_MAIN,
             fg=_TEXT,
             relief=tk.FLAT,
-            font=("Consolas", 9),
+            font=(_MONO_FONT, 9),
             highlightthickness=0,
         )
         path_entry.pack(fill=tk.X, ipady=5, padx=6)
@@ -671,7 +674,7 @@ class VibecheckApp:
             textvariable=self._snippet_var,
             bg=_BG_SUBTLE,
             fg=_TEXT,
-            font=("Consolas", 9),
+            font=(_MONO_FONT, 9),
             anchor=tk.W,
         ).pack(fill=tk.X)
         tk.Label(
@@ -679,7 +682,7 @@ class VibecheckApp:
             textvariable=self._hint_var,
             bg=_BG_SUBTLE,
             fg=_MUTED,
-            font=("Segoe UI", 9),
+            font=(_UI_FONT, 9),
             anchor=tk.W,
         ).pack(fill=tk.X)
 
@@ -692,7 +695,7 @@ class VibecheckApp:
             textvariable=self._status_var,
             bg=_BG_SIDEBAR,
             fg=_MUTED,
-            font=("Segoe UI", 8),
+            font=(_UI_FONT, 8),
             anchor=tk.W,
         ).pack(side=tk.LEFT)
 
@@ -714,7 +717,7 @@ class VibecheckApp:
             text=title,
             bg=_BG_CARD,
             fg=_MUTED,
-            font=("Segoe UI", 8, "bold"),
+            font=(_UI_FONT, 8, "bold"),
             anchor=tk.W,
         ).pack(fill=tk.X)
         val_lbl = tk.Label(
@@ -722,7 +725,7 @@ class VibecheckApp:
             textvariable=var,
             bg=_BG_CARD,
             fg=_TEXT,
-            font=("Segoe UI", 13, "bold"),
+            font=(_UI_FONT, 13, "bold"),
             anchor=tk.W,
         )
         val_lbl.pack(fill=tk.X)
@@ -914,7 +917,7 @@ class VibecheckApp:
         self._refresh_sidebar()
 
         if result.findings:
-            send_windows_notification(
+            send_notification(
                 f"vibecheck: {proj.name}",
                 f"Slop Score {result.slop_score}/100 ({len(result.findings)} issue(s), Vibe Signal: {result.vibe_likelihood}).",
             )
